@@ -1,0 +1,16 @@
+{
+  "name": "discord-fops",
+  "version": "1.0.0",
+  "description": "Hourly Fops powered by tinyfox.dev",
+  "keywords": [],
+  "author": "Readie",
+  "license": "GPL-3.0",
+  "type": "module",
+  "dependencies": {
+    "cron": "^1.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^17.0.23",
+    "@types/cron": "^1.7.3"
+  }
+}
