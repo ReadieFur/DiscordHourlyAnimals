@@ -34,9 +34,9 @@ class Main
     {
         const guilds = await Guilds.GetGuilds();
         const animalGuilds: Map<EAnimal, IDiscordWebhookEmbed> = new Map<EAnimal, IDiscordWebhookEmbed>();
-        for await (const guild of guilds)
+        for (const guild of guilds)
         {
-            for await (const animal of guild.animals)
+            for (const animal of guild.animals)
             {
                 if (!animalGuilds.has(animal))
                 {
