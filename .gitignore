@@ -130,3 +130,4 @@ dist
 .vscode/
 package-lock.json
 guilds.json
+dist.zip
