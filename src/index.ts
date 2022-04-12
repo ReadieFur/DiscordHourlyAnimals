@@ -26,7 +26,7 @@ class Main
 
         //#region REMOVE IN PRODUCTION
         ////Send fops on startup.
-        Main.ProcessGuilds();
+        // Main.ProcessGuilds();
         //#endregion
     }
 
