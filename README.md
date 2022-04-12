@@ -22,7 +22,7 @@ Successfully added webhook.
 > update-webhook https://discord.com/api/webhooks/9631----2897----38/Ni2D----XH6B----23Rt----BsIM----l35Y----Hw4Q----BzDk----Tv7Y----QtGc fox,yote
 Successfully updated webhook.
 > list-webhooks
-963125062897123338 Ni2DKaxqXH6Bp__E23RtqCYIBsIMCrHUl35YbfBhHw4Q8_6nBzDkuVvtTv7YkrqOQtGc
+9631----2897----38 9631----2897----38/Ni2D----XH6B----23Rt----BsIM----l35Y----Hw4Q----BzDk----Tv7Y----QtGc
 > remove-webhook https://discord.com/api/webhooks/9631----2897----38/Ni2D----XH6B----23Rt----BsIM----l35Y----Hw4Q----BzDk----Tv7Y----QtGc
 Successfully removed webhook.
 > exit
