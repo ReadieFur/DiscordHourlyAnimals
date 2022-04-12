@@ -1,10 +1,12 @@
-import * as cron from 'cron';
-import { Guilds, IGuildMinified, EAnimal } from './guilds.js';
-import { HttpsHelper } from './httpsHelper.js';
+import * as cron from "cron";
+import { emitKeypressEvents } from "readline";
+import { Guilds, IGuildMinified, EAnimal } from "./guilds.js";
+import { HttpsHelper } from "./httpsHelper.js";
+import * as readline from "readline";
 
 class Main
 {
-    //Most of the code in this program is static as there isn't really a need for objects with functions on them, interfaces are good enough.
+    //Most of the code in this program is static as there isn"t really a need for objects with functions on them, interfaces are good enough.
     /*This main class should only ever exist once
     and while it is unlikley it will exist more than once it is still good to enforce it being a singleton.*/
     private static _instance?: Main;
@@ -15,7 +17,12 @@ class Main
         Main._instance = this;
 
         //Hourly cronjob
-        new cron.CronJob('0 * * * *', Main.ProcessGuilds).start();
+        new cron.CronJob("0 * * * *", Main.ProcessGuilds).start();
+
+        Main.ManageIO();
+
+        //Log to Pterodactyl that the program has loaded.
+        console.log("[Pterodactyl] Ready");
 
         //#region REMOVE IN PRODUCTION
         ////Send fops on startup.
@@ -41,6 +48,97 @@ class Main
                 Main.SendWebhookMessage(guild, animalGuilds.get(animal)!);
             }
         }
+    }
+
+    private static ManageIO(): void
+    {
+        readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        }).on("line", async (_input) =>
+        {
+            const input = _input.split(" ");
+            switch (typeof input[0] === "string" ? input[0].toLowerCase() : null)
+            {
+                case "add-webhook":
+                    if (input[1] === undefined)
+                    {
+                        console.log("Missing webhook url.");
+                        return;
+                    }
+                    console.log(
+                        await Guilds.AddGuild(await Guilds.GuildURLToObject(new URL(input[1]))) ?
+                        "Successfully added webhook." :
+                        "Failed to add webhook."
+                    );
+                    break;
+                case "remove-webhook":
+                    if (input[1] === undefined)
+                    {
+                        console.log("Missing webhook url.");
+                        return;
+                    }
+                    var guild = await Guilds.GuildURLToObject(new URL(input[1]));
+                    console.log(
+                        await Guilds.RemoveGuild(guild.id, guild.token) ?
+                        "Successfully removed webhook." :
+                        "Failed to remove webhook."
+                    );
+                    break;
+                case "update-webhook":
+                    const EAnimalKeys = Object.keys(EAnimal).filter(key => isNaN(Number(key))).map(key => key.toLowerCase());
+                    if (input[1] === undefined)
+                    {
+                        console.log("Missing webhook url.");
+                        return;
+                    }
+                    if (input[2] === undefined)
+                    {
+                        console.log(`Missing animals. Animals must be comma separated. Valid animals are: ${EAnimalKeys.join(", ")}`);
+                        return;
+                    }
+                    var animals: EAnimal[] = [];
+                    for (const animal of input[2].split(","))
+                    {
+                        if (!EAnimalKeys.includes(animal.toLowerCase()))
+                        {
+                            console.log(`Invalid animal '${animal}'. Valid animals are: ${EAnimalKeys.join(", ")}`);
+                            return;
+                        }
+                        animals.push((<any>EAnimal)[animal[0].toUpperCase() + animal.slice(1)]);
+                    }
+                    var guild = await Guilds.GuildURLToObject(new URL(input[1]));
+                    if (await Guilds.GetGuildIndex(guild.id, guild.token) === -1)
+                    {
+                        console.log("Webhook does not exist.");
+                        return;
+                    }
+                    guild.animals = animals;
+                    console.log(
+                        await Guilds.UpdateGuild(guild.id, guild.token, guild) ?
+                        "Successfully updated webhook." :
+                        "Failed to update webhook."
+                    );
+                    break;
+                case "list-webhooks":
+                    for (const guild of (await Guilds.GetGuilds())) { console.log(`${guild.id} ${guild.token}`); }
+                    break;
+                case "exit":
+                    process.exit(0);
+                case "help":
+                    console.log(
+                        "add-webhook <url>\n" +
+                        "remove-webhook <url>\n" +
+                        "update-webhook <url> <animals[]>\n" +
+                        "list-webhooks\n" +
+                        "exit"
+                    );
+                    break;
+                default:
+                    console.log("Unknown command");
+                    break;
+            }
+        });
     }
 
     private static async CreateAnimalEmbed(animalID: EAnimal): Promise<IDiscordWebhookEmbed>

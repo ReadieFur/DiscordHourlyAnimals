@@ -16,6 +16,14 @@ export class Guilds
                 guild.animals === undefined ||
                 !(guild.animals instanceof Array)
             ) { throw new Error('Guilds file is invalid.'); }
+            for (const animalID in guild.animals)
+            {
+                if (
+                    isNaN(Number(animalID)) ||
+                    (<any>EAnimal)[animalID] === undefined
+                )
+                { throw new Error('Guilds file is invalid.'); }
+            }
         }
         return guilds;
     }
@@ -27,11 +35,37 @@ export class Guilds
         return { ...responseJSON, animals: [] };
     }
 
+    public static async GetGuildIndex(id: IGuildMinified["id"], token: IGuildMinified["token"]): Promise<number>
+    {
+        if (!(await Guilds.GuildsFileExists())) { return -1; }
+        return (await Guilds.GetGuilds()).findIndex(guild => guild.id === id && guild.token === token);
+    }
+
     public static async AddGuild(guild: IGuildMinified): Promise<boolean>
     {
-        const guilds = await Guilds.GuildsFileExists() ? await Guilds.GetGuilds() : [];
-        if (guilds.includes(guild)) { return false; }
+        if (await Guilds.GetGuildIndex(guild.id, guild.token) !== -1) { return false; }
+        const guilds = await Guilds.GetGuilds();
         guilds.push(guild);
+        await Guilds.SaveGuilds(guilds);
+        return true;
+    }
+
+    public static async RemoveGuild(id: IGuildMinified["id"], token: IGuildMinified["token"]): Promise<boolean>
+    {
+        const existingGuildIndex = await Guilds.GetGuildIndex(id, token);
+        if (existingGuildIndex === -1) { return false; }
+        const guilds = await Guilds.GetGuilds();
+        guilds.splice(existingGuildIndex, 1);
+        await Guilds.SaveGuilds(guilds);
+        return true;
+    }
+
+    public static async UpdateGuild(id: IGuildMinified["id"], token: IGuildMinified["token"], guild: IGuildMinified): Promise<boolean>
+    {
+        const existingGuildIndex = await Guilds.GetGuildIndex(id, token);
+        if (existingGuildIndex === -1) { return false; }
+        const guilds = await Guilds.GetGuilds();
+        guilds[existingGuildIndex] = guild;
         await Guilds.SaveGuilds(guilds);
         return true;
     }
