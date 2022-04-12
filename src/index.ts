@@ -1,256 +1,156 @@
-//Imports.
-import * as fs from "fs";
-import * as https from "https";
-import * as cron from "cron";
+import * as cron from 'cron';
+import { Guilds, IGuildMinified, EAnimal } from './guilds.js';
+import { HttpsHelper } from './httpsHelper.js';
 
-class HourlyFops
+class Main
 {
-    private initailized: boolean = false;
-    private guilds: IGuild[] = [];
+    //Most of the code in this program is static as there isn't really a need for objects with functions on them, interfaces are good enough.
+    /*This main class should only ever exist once
+    and while it is unlikley it will exist more than once it is still good to enforce it being a singleton.*/
+    private static _instance?: Main;
 
-    constructor() {}
-
-    public async AsyncInit(): Promise<void>
+    constructor()
     {
-        if (this.initailized) { return; }
+        if (Main._instance !== undefined) { return Main._instance; }
+        Main._instance = this;
 
-        //Check that the guilds.json file exists and is valid.
-        if (!fs.existsSync("guilds.json"))
-        {
-            console.log("guilds.json not found");
-            process.exit(1);
-        }
-        var guildsJson: string[];
-        try
-        {
-            guildsJson = JSON.parse(fs.readFileSync("guilds.json", "utf8"));
-        }
-        catch (err)
-        {
-            console.log("Invalid guilds.json");
-            process.exit(1);
-        }
-
-        //Parse the guilds.
-        for (const guild of guildsJson)
-        {
-            try
-            {
-                //Create a GET request to the guild"s webhook to get the webhook data.
-                const response = await HourlyFops.AsyncHttpsRequest(new URL(guild));
-
-                //Parse the webhook data.
-                const webhookData = JSON.parse(response.message);
-
-                //Check if the id field is present (this is to make sure the data is valid).
-                if (webhookData.id === undefined) { throw new Error("id field not found"); }
-
-                //Add the guild to the list of parsed guilds.
-                this.guilds.push(webhookData as IGuild);
-            }
-            catch (err)
-            {
-                //If the data is invalid, log the error and continue.
-                console.log(`Invalid webhook data for ${guild}`);
-                continue;
-            }
-        }
-
-        //Log to Pterodactyl that the program has loaded.
-        console.log("[Pterodactyl] Ready");
-
-        //Create a cron job to run hourly.
-        new cron.CronJob("0 * * * *", this.SendFops).start();
-
-        //Set the initailized flag to true.
-        this.initailized = true;
+        //Hourly cronjob
+        new cron.CronJob('0 * * * *', Main.ProcessGuilds).start();
 
         //#region REMOVE IN PRODUCTION
         ////Send fops on startup.
-        // this.SendFops();
+        Main.ProcessGuilds();
         //#endregion
     }
 
-    public static AsyncHttpsRequest(options: https.RequestOptions | URL, body: any = undefined): Promise<IAsyncHttpsResponse>
+    private static async ProcessGuilds(): Promise<void>
     {
-        return new Promise<IAsyncHttpsResponse>((resolve, reject) =>
+        const guilds = await Guilds.GetGuilds();
+        const animalGuilds: Map<EAnimal, IDiscordWebhookEmbed> = new Map<EAnimal, IDiscordWebhookEmbed>();
+        for await (const guild of guilds)
         {
-            const request = https.request(options, (res) =>
+            for await (const animal of guild.animals)
             {
-                var message = "";
-                res.on("data", (chunk) =>
+                if (!animalGuilds.has(animal))
                 {
-                    message += chunk;
-                });
-                res.on("end", () =>
-                {
-                    resolve({
-                        statusCode: res.statusCode,
-                        message: message
-                    });
-                });
-            });
-            request.on("error", (err) =>
-            {
-                reject(err);
-            });
-            if (body !== undefined) { request.write(body); }
-            request.end();
-        });
+                    animalGuilds.set(
+                        animal,
+                        await Main.CreateAnimalEmbed(animal)
+                    );
+                }
+                Main.SendWebhookMessage(guild, animalGuilds.get(animal)!);
+            }
+        }
     }
 
-    private async SendFops(): Promise<void>
+    private static async CreateAnimalEmbed(animalID: EAnimal): Promise<IDiscordWebhookEmbed>
     {
-        const guilds = this.guilds;
-        const startTime = Date.now();
-        if (guilds.length === 0) { return; }
+        var imageURL: string;
+        const response = JSON.parse((await HttpsHelper.AsyncHttpsRequest({
+            hostname: "api.tinyfox.dev",
+            path: `/img?animal=${EAnimal[animalID].toLowerCase()}&json`,
+            method: "GET"
+        })).message);
 
-        console.log(`Getting fops for ${guilds.length}, start time: ${startTime}...`);
+        //Check if the url field is present (this is to make sure the data is valid).
+        if (response.loc === undefined) { throw new Error("LOC field not found."); }
 
-        var imageURL: ITinyFoxResponse["loc"] | undefined;
-        try
+        //Get the image url.
+        imageURL = "https://api.tinyfox.dev" + response.loc;
+
+        //https://gist.github.com/thomasbnt/b6f455e2c7d743b796917fa3c205f812
+        var color = 10070709;
+        var name = EAnimal[animalID];
+        switch (animalID)
         {
-            //Get an image from tinyfox.dev.
-            const response = await HourlyFops.AsyncHttpsRequest({
-                hostname: "api.tinyfox.dev",
-                path: "/img?animal=fox&json",
-                method: "GET"
-            });
-
-            //Parse the image data.
-            const imageData = JSON.parse(response.message);
-
-            //Check if the url field is present (this is to make sure the data is valid).
-            if (imageData.loc === undefined) { throw new Error("url field not found"); }
-
-            //Get the image url.
-            imageURL = "https://api.tinyfox.dev" + imageData.loc;
+            case EAnimal.Bear: color = 6697728; break;
+            case EAnimal.Bleat: color = 10053171; break;
+            case EAnimal.Bun: color = 15658734; name = "Bnuuy"; break;
+            case EAnimal.Capy: color = 10586239; break;
+            case EAnimal.Caracal: color = 9268835; break;
+            case EAnimal.Chi: color = 2105376; break;
+            case EAnimal.Dog: color = 16777215; break;
+            case EAnimal.Dook: color = 15658734; break;
+            case EAnimal.Fox: color = 15105570; name = "Fops"; break;
+            case EAnimal.Jaguar: color = 16498733; break;
+            case EAnimal.Leo: color = 16766287; break;
+            case EAnimal.Mane: color = 15105570; break;
+            case EAnimal.Manul: color = 12434877; break;
+            case EAnimal.Marten: color = 7162945; break;
+            case EAnimal.Ott: color = 7162945; break;
+            case EAnimal.Poss: color = 4342338; break;
+            case EAnimal.Puma: color = 16766287; break;
+            case EAnimal.Racc: color = 5533306; break;
+            case EAnimal.Serval: color = 16766287; break;
+            case EAnimal.Shiba: color = 16769154; break;
+            case EAnimal.Skunk: color = 0; break;
+            case EAnimal.Snek: color = 4431943; break;
+            case EAnimal.Snep: color = 15658734; break;
+            case EAnimal.Tig: color = 15105570; break;
+            case EAnimal.Wah: color = 5570561; break;
+            case EAnimal.Woof: color = 12434877; break;
+            case EAnimal.Yeen: color = 16758605; break;
+            case EAnimal.Yote: color = 15658734; break;
         }
-        catch (err)
-        {
-            //If the data is invalid, log the error and continue.
-            console.log(`Failed to get image.`);
-            return;
-        }
 
-        //If the previous code block was successful, prepare the POST json data.
-        //https://discord.com/developers/docs/resources/webhook#execute-webhook
-        //I am trying to replicate the layout of the Telegram bot.
-        const postData = JSON.stringify(
-        {
+        return {
             embeds:
             [
                 {
-                    color: 15105570, //Orange (for fox)
-                    title: "Hourly Fops",
+                    color,
+                    title: `Hourly ${name}`,
                     image: { url: imageURL },
                     footer:
                     {
-                        icon_url: "https://cdn.global-gaming.co/images/readie/fops.jpg",
+                        // icon_url: "https://cdn.global-gaming.co/images/readie/fops.jpg",
+                        icon_url: "https://storage.ko-fi.com/cdn/useruploads/4bc71dfa-16a8-49ca-bb1e-09864c96f750.png",
                         text: imageURL
                     }
                 }
             ]
-        });
+        };
+    }
 
-        //Now send the post to each guild.
-        console.log("Sending fops...");
-        var guildsProcessed = 0;
-        //Asynchronous:
-        for (const guild of guilds)
+    private static async SendWebhookMessage(guild: IGuildMinified, embed: IDiscordWebhookEmbed): Promise<boolean>
+    {
+        try
         {
-            try
-            {
-                HourlyFops.AsyncHttpsRequest({
-                    hostname: "discord.com",
-                    path: `/api/webhooks/${guild.id}/${guild.token}`,
-                    method: "POST",
-                    headers:
-                    {
-                        "Content-Type": "application/json",
-                        "Content-Length": postData.length
-                    }
-                }, postData).then((response) =>
+            const postBody = JSON.stringify(embed);
+            const response = await HttpsHelper.AsyncHttpsRequest({
+                hostname: "discord.com",
+                path: `/api/webhooks/${guild.id}/${guild.token}`,
+                method: "POST",
+                headers:
                 {
-                    if (response.statusCode !== 204) { console.log(`Failed to send fops to ${guild.name} (${guild.id}/${guild.channel_id})`); }
-                    guildsProcessed++;
-                });
-            }
-            catch (err)
-            {
-                console.log(`Failed to send fops to ${guild.name} (${guild.id}/${guild.channel_id})`);
-                guildsProcessed++;
-            }
+                    "Content-Type": "application/json",
+                    "Content-Length": postBody.length
+                }
+            }, postBody);
+
+            if (response.statusCode !== 204) { throw new Error(); }
+            return true;
         }
-
-        //Syncronous:
-        /*var successfulGuilds: IGuild[] = [];
-        var failedGuilds: IGuild[] = [];
-        for (const guild of guilds)
+        catch (err)
         {
-            //POST to each guild.
-            try
-            {
-                const response = await HourlyFops.AsyncHttpsRequest({
-                    hostname: "discord.com",
-                    path: `/api/webhooks/${guild.id}/${guild.token}`,
-                    method: "POST",
-                    headers:
-                    {
-                        "Content-Type": "application/json",
-                        "Content-Length": postData.length
-                    }
-                }, postData);
-
-                if (response.statusCode === 204) { successfulGuilds.push(guild); }
-                else { failedGuilds.push(guild); }
-            }
-            catch (err) { failedGuilds.push(guild); }
+            // console.log(`Failed to send fops to ${guild.name} (${guild.id}/${guild.channel_id})`);
+            console.log(`Failed to send fops to ${guild.id}`);
+            return false;
         }
-
-        //Log the results.
-        if (failedGuilds.length === 0 && successfulGuilds.length > 0) { console.log("Sent fops to all guilds."); }
-        else if (failedGuilds.length > 0 && successfulGuilds.length === 0) { console.log("Failed to send fops to all guilds."); }
-        else
-        {
-            console.log(`Successfully sent fops to ${successfulGuilds.length} guilds:`);
-            for (const guild of successfulGuilds) { console.log(`${guild.name} (${guild.id}/${guild.channel_id}`); }
-
-            console.log(`Failed to send fops to ${failedGuilds.length} guilds:`);
-            for (const guild of failedGuilds) { console.log(`${guild.name} (${guild.id}/${guild.channel_id}`); }
-        }*/
-
-        new Promise<void>(async () =>
-        {
-            //Wait for all guilds to be processed.
-            while (guildsProcessed !== guilds.length) { await new Promise(resolve => setTimeout(resolve, 1000)); }
-            const now = Date.now();
-            console.log(`Processed fops for all ${guilds.length} guilds. Started at ${startTime}, ended at ${now}, took ${now - startTime}ms.`);
-        });
     }
 }
-new HourlyFops().AsyncInit();
+new Main();
 
-interface IAsyncHttpsResponse
+interface IDiscordWebhookEmbed
 {
-    statusCode: number | undefined,
-    message: string
-}
-
-interface IGuild
-{
-    type: number;
-    id: string;
-    name: string;
-    avatar: string;
-    channel_id: string;
-    guild_id: string;
-    application_id?: string;
-    token: string;
-}
-
-interface ITinyFoxResponse
-{
-    loc: string;
-    remaining_api_calls: string;
+    embeds:
+    {
+        color: number,
+        title: string,
+        image: { url: string },
+        footer:
+        {
+            icon_url: string,
+            text: string
+        }
+    }[];
 }
