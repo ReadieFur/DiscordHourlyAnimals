@@ -131,3 +131,4 @@ dist
 package-lock.json
 guilds.json
 dist.zip
+*.js

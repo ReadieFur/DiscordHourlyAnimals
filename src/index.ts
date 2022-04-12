@@ -123,6 +123,9 @@ class Main
                 case "list-webhooks":
                     for (const guild of (await Guilds.GetGuilds())) { console.log(`${guild.id} ${guild.token}`); }
                     break;
+                case "process-webhooks":
+                    Main.ProcessGuilds();
+                    break;
                 case "exit":
                     process.exit(0);
                 case "help":
@@ -131,6 +134,7 @@ class Main
                         "remove-webhook <url>\n" +
                         "update-webhook <url> <animals[]>\n" +
                         "list-webhooks\n" +
+                        "process-webhooks\n" +
                         "exit"
                     );
                     break;
